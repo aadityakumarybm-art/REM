@@ -1,0 +1,91 @@
+name: REM free scan from ChatGPT
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: rem-free-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    # A title alone is insufficient: only the repository owner's issues may run scans.
+    if: >-
+      github.event.issue.user.login == github.repository_owner &&
+      startsWith(github.event.issue.title, 'REM scan: ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      SCRAPECREATORS_API_KEY: ""
+      SCRAPE_CREATORS_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      ANTHROPIC_AUTH_TOKEN: ""
+      REM_MAX_CREDITS: "0"
+      REM_CONFIG_DIR: ${{ github.workspace }}/.rem-no-keys
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the requested public domain
+        id: target
+        run: |
+          node --test tests/parse-scan-target.test.mjs
+          domain="$(node scripts/parse-scan-target.mjs "$ISSUE_TITLE")"
+          printf 'domain=%s\n' "$domain" >> "$GITHUB_OUTPUT"
+      - name: Fetch pinned REM source
+        uses: actions/checkout@v4
+        with:
+          repository: dansugc/reverse-engineer-marketing
+          ref: 5b78198b2578997412853ab0858b10670fa74984
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+      - name: Install and build REM
+        working-directory: upstream
+        run: |
+          npm ci
+          npm run build
+      - name: Collect public, zero-credit marketing evidence
+        env:
+          TARGET: ${{ steps.target.outputs.domain }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/rem-report"
+          node upstream/dist/cli.js "$TARGET" --no-ai --max-credits 0 --out "$RUNNER_TEMP/rem-report"
+      - name: Upload complete evidence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rem-free-scan-${{ github.event.issue.number }}
+          path: ${{ runner.temp }}/rem-report/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Return the report in the GitHub issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          DOMAIN: ${{ steps.target.outputs.domain }}
+          REPORT_FILE: ${{ runner.temp }}/rem-report/report.md
+          COMMENT_FILE: ${{ runner.temp }}/rem-comment.md
+          ACTION_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+          const report = existsSync(process.env.REPORT_FILE) ? readFileSync(process.env.REPORT_FILE, 'utf8') : null;
+          const intro = report
+            ? '### REM free scan: ' + process.env.DOMAIN + '\n\nPublic evidence only; no paid data or AI API was used.\n\n'
+            : '### REM scan could not finish\n\nCheck the workflow logs for the cause.\n\n';
+          const excerpt = report ? Array.from(report).slice(0, 45000).join('').replaceAll('@', '@\u200b') : '';
+          const tail = '\n\n[GitHub Actions run and full evidence artifact](' + process.env.ACTION_URL + ')';
+          writeFileSync(process.env.COMMENT_FILE, intro + excerpt + tail);
+          NODE
+          gh issue comment "$ISSUE_NUMBER" --body-file "$COMMENT_FILE"

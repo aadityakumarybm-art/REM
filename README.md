@@ -35,3 +35,29 @@ See [docs/CHATGPT_MCP_SETUP.md](docs/CHATGPT_MCP_SETUP.md). The MCP server uses 
 This repository **does not contain marketing API keys**. Do not commit `.env`, reports containing sensitive notes, tunnel credentials, or API keys. The upstream code is MIT licensed; see [ORIGIN.md](ORIGIN.md). Always review upstream changes before changing the commit pin. Public sites can rate-limit/block scans; an unknown result is not proof a channel is unused.
 
 **Scope:** this repository is an installation/automation wrapper. It does not mirror all upstream source files, deploy a persistent MCP server, or create a tunnel on your behalf.
+
+## Use REM from this ChatGPT conversation (no tunnel, no marketing API key)
+
+The connected GitHub plugin can create a scan issue and read its results. This is
+**GitHub automation**, not a direct MCP connection. It needs no OpenAI Platform
+tunnel or separate Scrape Creators / Anthropic API key.
+
+1. Ask ChatGPT: **"Run a free REM scan of sorabyte.in using my GitHub REM repository."**
+2. ChatGPT creates a GitHub issue titled `REM scan: sorabyte.in`.
+3. A GitHub Actions job on the default branch runs pinned REM with
+   `--no-ai --max-credits 0`, then replies to that issue with `report.md`.
+4. ChatGPT reads the issue comment using the connected GitHub plugin and builds
+   an evidence-cited marketing report. A complete `evidence.json` is also
+   retained as a short-lived Actions artifact.
+
+For a quick test, use `REM scan: example.com`. Editing an existing scan issue
+also triggers a new scan; only issues created by the repository owner are
+eligible. Use **public company domains only**, without `http://`, paths or
+query strings. Reports are public in this public repository. Do not scan
+private/internal services. The workflow does not run paid ad/social collectors
+and does not turn ChatGPT into a native REM MCP client.
+
+The first ChatGPT-to-GitHub scan may require workspace confirmation for GitHub
+write actions. After a scan starts, the comment appears only when GitHub Actions
+finishes; ChatGPT cannot keep a job alive or deliver future results without a
+new user turn. Read its status through GitHub Actions.
