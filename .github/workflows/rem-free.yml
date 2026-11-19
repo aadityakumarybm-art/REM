@@ -24,7 +24,7 @@ jobs:
       ANTHROPIC_API_KEY: ""
       ANTHROPIC_AUTH_TOKEN: ""
       REM_MAX_CREDITS: "0"
-      REM_CONFIG_DIR: ${{ runner.temp }}/rem-no-keys
+      REM_CONFIG_DIR: ${{ github.workspace }}/.rem-no-keys
     steps:
       - uses: actions/checkout@v4
       - name: Fetch audited upstream REM revision
