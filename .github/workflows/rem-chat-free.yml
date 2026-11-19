@@ -15,7 +15,9 @@ concurrency:
 jobs:
   scan:
     # A title alone is insufficient: only the repository owner's issues may run scans.
-    if: github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, 'REM scan: ')
+    if: >-
+      github.event.issue.user.login == github.repository_owner &&
+      startsWith(github.event.issue.title, 'REM scan: ')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
