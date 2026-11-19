@@ -1,0 +1,73 @@
+name: REM free verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Public company domain or https URL to analyze
+        required: true
+        type: string
+        default: sorabyte.in
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SCRAPECREATORS_API_KEY: ""
+      SCRAPE_CREATORS_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      ANTHROPIC_AUTH_TOKEN: ""
+      REM_MAX_CREDITS: "0"
+      REM_CONFIG_DIR: ${{ runner.temp }}/rem-no-keys
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch audited upstream REM revision
+        uses: actions/checkout@v4
+        with:
+          repository: dansugc/reverse-engineer-marketing
+          ref: 5b78198b2578997412853ab0858b10670fa74984
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+      - name: Install dependencies (pinned lockfile)
+        working-directory: upstream
+        run: npm ci
+      - name: Check types
+        working-directory: upstream
+        run: npm run typecheck
+      - name: Run tests
+        working-directory: upstream
+        run: npm test
+      - name: Build REM
+        working-directory: upstream
+        run: npm run build
+      - name: Confirm no paid API keys
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: upstream
+        run: node dist/cli.js doctor
+      - name: Free evidence scan
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: upstream
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/rem-report"
+          node dist/cli.js "$TARGET" --no-ai --max-credits 0 --out "$RUNNER_TEMP/rem-report"
+      - name: Upload evidence report
+        if: github.event_name == 'workflow_dispatch' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rem-free-report
+          path: ${{ runner.temp }}/rem-report/
+          if-no-files-found: ignore
+          retention-days: 7

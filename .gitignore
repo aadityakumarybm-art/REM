@@ -1,0 +1,6 @@
+.rem-upstream/
+.rem-empty-config/
+rem-reports/
+.env
+.env.local
+*.log
